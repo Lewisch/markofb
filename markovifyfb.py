@@ -20,6 +20,13 @@ def text_data_file():
         f = open(filepath,'a')
         print "text_data_file no"
 
+#Checks if text file is empty
+def check_text_file_empty(openedTextFilepath):
+    if os.path.getsize(openedTextFilepath) > 0:
+	return False
+    else:
+	return True
+
 #Helper function
 def checkInt(n):
     try: 
@@ -62,24 +69,26 @@ def getnextLink(jsondata):
 	nextLink = "end"
 
 #Gets the data from facebook and compiles into our text file
-def collect_from_fb(jData, txtData):
+def collect_from_fb(firstURL):
+    startingJSON = newurl.retrieve(firstURL, "0messages.json")
+    startingFilepath = os.path.join(os.getcwd(), "0messages.json")
+    filelist.append(startingFilepath)
+    load_json(startingFilepath)            
     i = 1
     write_messages(currentJSON)
     getnextLink(currentJSON)
     while nextLink != "end" and i < 20:
 	getnextLink(currentJSON)
 	if nextLink != "end":
-	        nextFilePath = str(os.getcwd()) + "/" + str(i) + "messages.json"
-	        filelist.append(nextFilePath)
-		try:
-    	    	    nextfile = newurl.retrieve(nextLink, str(i) + "messages.json")
-		except IOError:
-		    print "Double check your JSON and get a new access code"
-		    return		
-	        load_json(nextFilePath)
-	        write_messages(currentJSON)
-		prevfile = jData
-		jData = nextfile
+	    nextFilePath = os.path.join(os.getcwd(),str(i) + "messages.json")
+	    filelist.append(nextFilePath)
+            try:
+    	        nextfile = newurl.retrieve(nextLink, str(i) + "messages.json")
+	    except IOError:
+	        print "Double check your JSON and get a new access code"
+	        return		
+	    load_json(nextFilePath)
+            write_messages(currentJSON)
 	else: 
 	    print "All facebook data collected"
 	    break
@@ -114,25 +123,26 @@ def printSentences(n):
     for i in range(int(n)):
             print(text_model.make_short_sentence(140))
 
-def main(*args):
+#Decides whether to use existing text file or get new data
+def decideRoute(acccode, pgid):
     try:
-        startingURL = "https://graph.facebook.com/" + str(PageID.get()) + "/statuses?access_token=" + str(accessCode.get())
+	startingURL = "https://graph.facebook.com/" + PageID.get() + "/statuses?access_token=" + accessCode.get()
 	print startingURL
+	collect_from_fb(startingURL)
+	buildModel(txtFilepath)
+	printSentences(int(numSentence.get()))
+	deleteFiles(filelist)       
     except IOError:
-	return "Double-check the page ID and access token"
-    try:
-        startingJSON = newurl.retrieve(startingURL, "0messages.json")
-        text_data_file()
-	startingFilepath = str(os.getcwd()) + "/0messages.json"
-	filelist.append(startingFilepath)
-        load_json(startingFilepath)        
-        collect_from_fb(currentJSON, txtFilepath)
-        buildModel(txtFilepath)
-        numS = int(numSentence.get())
-        printSentences(numS)
-	deleteFiles(filelist)
-    except ValueError:
-        pass
+	if check_text_file_empty(txtFilepath) == True:
+	    print "Double check your inputs"
+	else:
+	    print "Access Code and/or Page ID invalid, using existing data"
+	    buildModel(txtFilepath)
+	    printSentences(int(numSentence.get()))
+
+def main(*args):
+    text_data_file()
+    decideRoute(PageID.get(), accessCode.get())
     
 root = Tk()
 root.title("Markovify a Facebook page")
