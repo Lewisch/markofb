@@ -6,34 +6,33 @@ import markovify
 from Tkinter import *
 import ttk
 
+#First, two quick helper functions
 
-#Opens the text file to be used for the data
-def text_data_file():
-    global f
-    global txtFilepath 
-    filepath = str(txtFile.get())
-    txtFilepath = filepath
-    if os.path.isfile(filepath):
-        f = open(filepath, 'a')
-        print "text_data_file yes"
-    else:
-        f = open(filepath,'a')
-        print "text_data_file no"
-
-#Checks if text file is empty
+#Checks if a file is empty
 def check_text_file_empty(openedTextFilepath):
     if os.path.getsize(openedTextFilepath) > 0:
 	return False
     else:
 	return True
 
-#Helper function
+#Checks if n is an integer
 def checkInt(n):
     try: 
         int(n)
         return True
     except ValueError:
         return False
+
+#Opens the text file to be used for the data
+def text_data_file():
+    global f
+    filepath = txtFile.get()
+    if os.path.isfile(filepath):
+        f = open(filepath, 'a')
+        print "Using existing text data file"
+    else:
+        f = open(filepath,'a')
+        print "Using new text data file"
 
 #Opens the JSON file and converts it so Python can read it
 def load_json(jsonfilepath):
@@ -47,36 +46,45 @@ def load_json(jsonfilepath):
 #Writes the messages in your dataset to your text file
 def write_messages(jsonData):
     mylen = len(jsonData['data'])
+    #print mylen
     i=0
     while i < mylen:
         f.write(jsonData['data'][i]['message'].encode('utf-8'))
+	print jsonData['data'][i]['message']
         i+=1
+    f.close()
 
-global prevfile
+#For collect_from_fb
 global nextfile
 global newurl
 global filelist
 filelist = []
 newurl = urllib.URLopener()
 
-#Gets the link to the next page of JSON data
+# Gets the link to the next page of JSON data
 def getnextLink(jsondata):
     global nextLink
     if 'next' in jsondata.get('paging'):
         nextLink = str(jsondata.get('paging').get('next'))
-	print nextLink
+	#print nextLink
+	#print "next found"
     else:
 	nextLink = "end"
 
-#Gets the data from facebook and compiles into our text file
+# Gets the data from facebook and compiles into our text file
 def collect_from_fb(firstURL):
     startingJSON = newurl.retrieve(firstURL, "0messages.json")
     startingFilepath = os.path.join(os.getcwd(), "0messages.json")
     filelist.append(startingFilepath)
-    load_json(startingFilepath)            
+    print filelist
+    load_json(startingFilepath)
+    print "starting json loaded"            
     i = 1
     write_messages(currentJSON)
+    print "starting messages written"
     getnextLink(currentJSON)
+    print nextLink
+    #set to only get first 20 pages
     while nextLink != "end" and i < 20:
 	getnextLink(currentJSON)
 	if nextLink != "end":
@@ -85,7 +93,7 @@ def collect_from_fb(firstURL):
             try:
     	        nextfile = newurl.retrieve(nextLink, str(i) + "messages.json")
 	    except IOError:
-	        print "Double check your JSON and get a new access code"
+	        print "Error in collect_from_fb, Double check your JSON and get a new access code"
 	        return		
 	    load_json(nextFilePath)
             write_messages(currentJSON)
@@ -94,7 +102,7 @@ def collect_from_fb(firstURL):
 	    break
 	i += 1
 
-##deletes files in a list and empties the list
+# Deletes files in a list and empties the list
 def deleteFiles(listoffiles):
     for i in listoffiles:
 	if os.path.isfile(i) == False:
@@ -112,7 +120,7 @@ def buildModel(myfile):
         text = f1.read()
     text_model = markovify.Text(text)
 
-# Print n randomly-generated sentences
+# Print n randomly-generated sentences of at most 140 characters
 def printSentences(n):
     while checkInt(n) == False:
         print "Please enter a positive integer"
@@ -121,28 +129,31 @@ def printSentences(n):
         print "Please enter a positive integer"
         printSentences(n)
     for i in range(int(n)):
+	    #print i
             print(text_model.make_short_sentence(140))
 
-#Decides whether to use existing text file or get new data
-def decideRoute(acccode, pgid):
+# Decides whether to use an existing text file to make the sentences or get new data
+def decideRoute(pid, acccode, flist):
     try:
-	startingURL = "https://graph.facebook.com/" + PageID.get() + "/statuses?access_token=" + accessCode.get()
+	startingURL = "https://graph.facebook.com/" + pid + "/statuses?access_token=" + acccode
 	print startingURL
 	collect_from_fb(startingURL)
-	buildModel(txtFilepath)
+	#print "all data collected"
+	buildModel(str(txtFile.get()))
+	#print "model built"
 	printSentences(int(numSentence.get()))
-	deleteFiles(filelist)       
+	deleteFiles(flist)       
     except IOError:
-	if check_text_file_empty(txtFilepath) == True:
-	    print "Double check your inputs"
+	if check_text_file_empty(str(txtFile.get())) == True:
+	    print "Double check your inputs, unable to use data"
 	else:
 	    print "Access Code and/or Page ID invalid, using existing data"
-	    buildModel(txtFilepath)
+	    buildModel(str(txtFile.get()))
 	    printSentences(int(numSentence.get()))
 
 def main(*args):
     text_data_file()
-    decideRoute(PageID.get(), accessCode.get())
+    decideRoute(PageID.get(), accessCode.get(), filelist)
     
 root = Tk()
 root.title("Markovify a Facebook page")
